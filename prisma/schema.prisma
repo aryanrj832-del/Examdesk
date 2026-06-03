@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  email        String?  @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+  attendanceTaken AttendanceRecord[] @relation("TeacherAttendance")
+  attendanceReceived AttendanceRecord[] @relation("StudentAttendance")
+  passwordResets PasswordResetToken[]
+}
+
+model StudentProfile {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  program         String?
+  section         String?
+  phoneNumber     String?
+  biometricId     String?
+  profileImageUrl String?
+  /// ID printed on the answer sheet (barcode payload)
+  answerSheetCode String
+
+  seat SeatAssignment?
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model TeacherProfile {
+  id              String @id @default(cuid())
+  userId          String @unique
+  user            User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  department      String
+  profileImageUrl String @default("/default-avatar.svg")
+}
+
+/// One row per student linking them to hall ticket + room (assigned by examination dept)
+model SeatAssignment {
+  id               String @id @default(cuid())
+  studentProfileId String @unique
+  studentProfile   StudentProfile @relation(fields: [studentProfileId], references: [id], onDelete: Cascade)
+  hallRoom         String
+  seatNumber       String?
+  hallTicketNumber String
+}
+
+/// Pool uploaded by examination section: hall + label (often teacher display name from sheet)
+model InvigilationSlot {
+  id              String   @id @default(cuid())
+  hallRoom        String
+  csvTeacherLabel String
+  teacherWebsite  String?
+  teacherUserId   String?
+  claimedAt       DateTime?
+}
+
+model AttendanceRecord {
+  id            String    @id @default(cuid())
+  studentUserId String
+  teacherUserId String
+  present       Boolean   @default(false)
+  scannedCode   String?
+  biometricId   String?
+  submittedAt   DateTime  @default(now())
+
+  student User @relation("StudentAttendance", fields: [studentUserId], references: [id], onDelete: Cascade)
+  teacher User @relation("TeacherAttendance", fields: [teacherUserId], references: [id], onDelete: Cascade)
+
+  @@unique([studentUserId, teacherUserId])
+}
